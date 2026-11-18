@@ -137,10 +137,12 @@ def merge_records(new: list) -> None:
 # ---------------------------------------------------------------------------
 # 2. 대시보드 생성
 # ---------------------------------------------------------------------------
-def build(records=None) -> None:
+def build(records=None, sample=False) -> None:
     if records is None:
         records = json.loads(DATA_FILE.read_text(encoding="utf-8")) if DATA_FILE.exists() else []
-    html = DASHBOARD_TEMPLATE.replace("__DATA__", json.dumps(records, ensure_ascii=False))
+    html = (DASHBOARD_TEMPLATE
+            .replace("__DATA__", json.dumps(records, ensure_ascii=False))
+            .replace("__SAMPLE__", "true" if sample else "false"))
     OUT_HTML.write_text(html, encoding="utf-8")
     print(f"대시보드 생성 → {OUT_HTML}  (브라우저로 여세요)")
 
@@ -162,7 +164,7 @@ def demo() -> None:
                                      "cabin": cabin, "seats": random.randint(1, 4),
                                      "miles": miles[cabin], "flight": f"{al}0{random.randint(10, 99)}",
                                      "collected_at": datetime.now().isoformat(timespec="minutes")})
-    build(recs)
+    build(recs, sample=True)
 
 
 DASHBOARD_TEMPLATE = r"""<!doctype html>
@@ -173,10 +175,10 @@ DASHBOARD_TEMPLATE = r"""<!doctype html>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;600&display=swap" rel="stylesheet">
 <style>
 :root{--bg:#f5f7fa;--surface:#fff;--ink:#1c2430;--muted:#6b7684;--line:#dfe4ea;
- --ke:#1f6fb2;--oz:#a8323e;--empty:#eef1f4;color-scheme:light}
+ --ke:#1f6fb2;--oz:#a8323e;--empty:#eef1f4;--warn-bg:#fff6dc;--warn-ink:#6b4e00;--warn-line:#f0d58a;color-scheme:light}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#12161c;--surface:#1a2029;--ink:#e6eaf0;
- --muted:#8b95a3;--line:#2b333f;--ke:#5aa4e0;--oz:#e06a76;--empty:#222a35;color-scheme:dark}}
-:root[data-theme="dark"]{--bg:#12161c;--surface:#1a2029;--ink:#e6eaf0;--muted:#8b95a3;--line:#2b333f;--ke:#5aa4e0;--oz:#e06a76;--empty:#222a35;color-scheme:dark}
+ --muted:#8b95a3;--line:#2b333f;--ke:#5aa4e0;--oz:#e06a76;--empty:#222a35;--warn-bg:#3a3018;--warn-ink:#f3d98a;--warn-line:#6b5a26;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#12161c;--surface:#1a2029;--ink:#e6eaf0;--muted:#8b95a3;--line:#2b333f;--ke:#5aa4e0;--oz:#e06a76;--empty:#222a35;--warn-bg:#3a3018;--warn-ink:#f3d98a;--warn-line:#6b5a26;color-scheme:dark}
 :root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--ink);
@@ -209,7 +211,14 @@ th,td{padding:7px 8px;border-bottom:1px solid var(--line);text-align:left;font-s
 th{color:var(--muted);font-weight:600}
 .wrap{overflow-x:auto}
 .empty{color:var(--muted);padding:24px 0}
+.sample{background:var(--warn-bg);color:var(--warn-ink);border:1px solid var(--warn-line);
+ border-radius:6px;padding:10px 12px;margin:0 0 16px;font-size:.9rem}
+.sample strong{display:block;margin-bottom:2px}
+.trip{font-size:1.05rem;margin:0 0 12px}
+.trip small{color:var(--muted);font-size:.8rem;display:block}
 </style></head><body><main>
+<div class="sample" id="sample" hidden><strong>샘플 데이터입니다</strong>
+ 화면 확인용으로 무작위 생성한 값이며 실제 항공사 잔여석·편명·마일과 무관합니다.</div>
 <h1>마일리지 좌석 현황</h1>
 <p class="sub" id="meta"></p>
 <div class="controls">
@@ -221,6 +230,7 @@ th{color:var(--muted);font-weight:600}
   <option value="ALL">두 항공사</option><option value="KE">대한항공</option>
   <option value="OZ">아시아나</option></select>
 </div>
+<p class="trip" id="trip"></p>
 <div class="legend"><span><span class="dot" style="background:var(--ke)"></span>대한항공</span>
  <span><span class="dot" style="background:var(--oz)"></span>아시아나</span>
  <span>칸: 일반 · 비즈 · 일등</span></div>
@@ -231,12 +241,25 @@ th{color:var(--muted);font-weight:600}
 </main>
 <script>
 const DATA = __DATA__;
+const IS_SAMPLE = __SAMPLE__;
+const CITY = {ICN:"서울/인천",GMP:"서울/김포",PUS:"부산",CJU:"제주",
+ JFK:"뉴욕",EWR:"뉴욕/뉴어크",LAX:"로스앤젤레스",SFO:"샌프란시스코",SEA:"시애틀",
+ ORD:"시카고",ATL:"애틀랜타",IAD:"워싱턴",YVR:"밴쿠버",YYZ:"토론토",HNL:"호놀룰루",
+ CDG:"파리",LHR:"런던",FRA:"프랑크푸르트",FCO:"로마",MXP:"밀라노",BCN:"바르셀로나",
+ MAD:"마드리드",IST:"이스탄불",PRG:"프라하",VIE:"빈",ZRH:"취리히",AMS:"암스테르담",
+ NRT:"도쿄/나리타",HND:"도쿄/하네다",KIX:"오사카",FUK:"후쿠오카",CTS:"삿포로",
+ PEK:"베이징",PVG:"상하이",HKG:"홍콩",TPE:"타이베이",BKK:"방콕",SGN:"호찌민",
+ HAN:"하노이",DAD:"다낭",SIN:"싱가포르",MNL:"마닐라",CEB:"세부",KUL:"쿠알라룸푸르",
+ DPS:"발리",SYD:"시드니",AKL:"오클랜드",GUM:"괌",SPN:"사이판",DXB:"두바이"};
+const cityOf = c => CITY[c] ? `${CITY[c]}(${c})` : c;
 const $ = id => document.getElementById(id);
 const CAB = {Y:"일반석",C:"비즈니스",F:"일등석"}, AL = {KE:"대한항공",OZ:"아시아나"};
 let view = new Date(); view.setDate(1); let selDay = null;
 
 const routes = [...new Set(DATA.map(r => r.origin + "-" + r.dest))].sort();
-$("route").innerHTML = routes.map(r => `<option>${r}</option>`).join("");
+$("route").innerHTML = routes.map(r => { const [o,d] = r.split("-");
+  return `<option value="${r}">${cityOf(o)} → ${cityOf(d)}</option>`; }).join("");
+$("sample").hidden = !IS_SAMPLE;
 const last = DATA.map(r => r.collected_at).sort().pop();
 $("meta").textContent = DATA.length
   ? `${DATA.length}건 · 마지막 수집 ${last ? last.replace("T"," ") : "-"} · 수집 시점 기준이며 실제 잔여석은 사이트에서 다시 확인하세요`
@@ -250,6 +273,8 @@ function filtered(){
 const ymd = dt => dt.toISOString().slice(0,10);
 
 function render(){
+  const [ro,rd] = ($("route").value||"-").split("-");
+  $("trip").innerHTML = ro ? `출발 ${cityOf(ro)} → 도착 ${cityOf(rd)}` : "";
   const rows = filtered(), byDay = {};
   rows.forEach(r => (byDay[r.date] ??= []).push(r));
   const y = view.getFullYear(), m = view.getMonth();
